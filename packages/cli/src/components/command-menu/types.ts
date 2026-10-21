@@ -5,6 +5,8 @@ export type CommandContext = {
   exit: () => void;
   toast: ToastContextValue;
   dialog: DialogContextValue;
+  newChat: () => void;
+  toggleYolo: () => void;
 };
 
 export type Command = {

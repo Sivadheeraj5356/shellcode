@@ -11,6 +11,7 @@ import { useToast } from "../providers/toast";
 import { useKeyboardLayer } from "../providers/keyboard-layer";
 import { useDialog } from "../providers/dialog";
 import { useTheme } from "../providers/theme";
+import { useSession } from "../providers/session";
 
 type Props = {
   onSubmit: (text: string) => void;
@@ -31,6 +32,7 @@ export function InputBar({ onSubmit, disabled = false }: Props) {
   const toast = useToast();
   const dialog = useDialog();
   const { colors } = useTheme();
+  const session = useSession();
   const { isTopLayer, setResponder } = useKeyboardLayer();
 
   const {
@@ -75,12 +77,14 @@ export function InputBar({ onSubmit, disabled = false }: Props) {
           exit: () => renderer.destroy(),
           toast,
           dialog,
+          newChat: session.newChat,
+          toggleYolo: () => { session.update({ yolo: !session.cfg.yolo }); toast.show({ message: session.cfg.yolo ? "Approvals on" : "Auto-approve on: edits and commands run without asking" }); },
         });
       } else {
         textarea.insertText(command.value + " ");
       }
     },
-    [renderer, toast, dialog],
+    [renderer, toast, dialog, session],
   );
 
   const handleCommandExecute = useCallback(

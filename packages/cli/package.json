@@ -4,7 +4,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun run --watch src/index.tsx"
+    "dev": "bun run --watch src/index.tsx",
+    "start": "bun run src/index.tsx",
+    "test": "bun test"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -16,6 +18,10 @@
   "dependencies": {
     "@opentui/core": "^0.5.4",
     "@opentui/react": "^0.5.4",
-    "react": "^19.2.6"
+    "react": "^19.2.6",
+    "@shellcode/core": "workspace:*"
+  },
+  "bin": {
+    "shellcode": "src/index.tsx"
   }
 }

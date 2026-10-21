@@ -1,10 +1,19 @@
 {
-    "name": "shellcode",
-    "version": "1.0.0",
-    "workspaces": ["packages/*"],
-    "scripts": {
-        "dev": "bun run --watch packages/cli/src/index.tsx"
-    }
-    
-    
+  "name": "shellcode",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --watch packages/cli/src/index.tsx",
+    "start": "bun run packages/cli/src/index.tsx",
+    "test": "bun test packages",
+    "typecheck": "tsc --noEmit -p packages/cli && tsc --noEmit -p packages/core"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.3",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
   }
+}
