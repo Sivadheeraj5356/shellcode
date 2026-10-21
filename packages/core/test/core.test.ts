@@ -276,3 +276,9 @@ test("external harness with unknown cost is refused under free policy and never 
   const ok = await collect(runAgent({ prompt: "hi", cwd: dir, harness: "opencode", model: "opencode/glm-free", policy: "free" }, { cfg: DEFAULT_CONFIG, models: [], env }));
   expect(ok.some((e) => e.type === "text")).toBe(true);
 }, 30000);
+
+test("router: diagnosis and test-writing prompts are not treated as trivial", () => {
+  expect(scoreTask({ prompt: "why is my build failing" }).tier).toBe("standard");
+  expect(scoreTask({ prompt: "write a unit test for the parser" }).tier).toBe("standard");
+  expect(scoreTask({ prompt: "fix typo in readme" }).tier).toBe("light");
+});

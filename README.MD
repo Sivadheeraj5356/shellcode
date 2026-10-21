@@ -26,6 +26,19 @@ bun run start run -y "add input validation to parse()"
 bun run start run -H aider "rename foo to bar"   # use an installed external harness
 ```
 
+### Reproduce a keyless local run
+
+```bash
+# 1. a local OpenAI-compatible server on port 11434 or 1234 (Ollama, LM Studio, or llama.cpp's llama-server)
+llama-server -m qwen2.5-1.5b-instruct-q4_k_m.gguf --port 11434 --jinja   # needs --jinja for tool calls
+# 2. confirm Shellcode sees it
+bun run start doctor
+# 3. run a task (-y auto-approves edits in the current folder)
+bun run start run -y "In a.txt, replace the word old with new."
+```
+
+External harnesses are separate installs with their own logins. `doctor` marks one as installed only if its binary is on PATH and `--version` exits 0, and it prints the official docs link for installing it. OpenCode needs no key for its zero-priced models (`opencode models opencode --verbose` lists their cost).
+
 Set at least one provider key in your environment. Shellcode reads keys from environment variables and never writes them to disk:
 
 | Provider | Variable | Cost |
@@ -72,6 +85,7 @@ Run `bun run test` and `bun run typecheck`.
 - Built-in agent end to end against a mock OpenAI-compatible server: light task goes to the small model, a real file is edited, a real command runs, 429 falls back, a denied approval changes nothing, SSE streaming and streamed tool calls work.
 - Symlink escape, secret-free shell environment, session save and reload.
 - `shellcode run` as a real process, and the terminal UI driven through a real pseudo-terminal.
+- Local OpenAI-compatible server, no account: one run against llama.cpp `llama-server` (port 11434, the address Shellcode uses for its `ollama` entry) with Qwen2.5-1.5B-Instruct Q4. The built-in agent discovered the model, streamed a reply, made one real `edit_file` call and the file changed. This is a single run on one small model, so it shows the path works, not how reliable tool use is for any model size. Real Ollama and LM Studio were not tested; they should work through the same OpenAI-compatible API but that is unverified.
 - External harness adapters: the flags for all eight were checked against each vendor's official docs on 2026-10-21 (links in `shellcode doctor`) and the generated command lines are tested. Only OpenCode has been run for real (a zero-priced `opencode/*` catalog model, synthetic prompts, one reply and one file edit). Claude Code, Codex, Cursor, Antigravity, Gemini CLI, Aider and Goose were not run, so treat them as "documented, not yet exercised". The OpenCode free models are hosted by a third party, so do not send private code to them until you have read their terms. Codex and Goose model selection is not passed because no headless model flag was confirmed. A harness shows as installed only if its binary is found and `--version` succeeds.
 - Not tested against any live provider (no keys were used) or with real free-tier limits.
 

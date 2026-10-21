@@ -84,13 +84,15 @@ async function runCmd(args: string[]) {
   if (failed) process.exitCode = 1;
 }
 
+let lastChar = "\n";
 function print(ev: AgentEvent, fail: () => void) {
   switch (ev.type) {
     case "route": console.error(`[route] ${ev.decision.tier}: ${ev.decision.chain[0] ? `${ev.decision.chain[0].provider}/${ev.decision.chain[0].id}` : "no model"} (${ev.decision.reasons.slice(0, 2).join("; ")})`); break;
-    case "text": process.stdout.write(ev.text.endsWith("\n") ? ev.text : ev.text + "\n"); break;
+    case "text": process.stdout.write(ev.text); lastChar = ev.text.slice(-1) || lastChar; break;
     case "tool": console.error(`[${ev.error ? "fail" : "ok"}] ${ev.name} ${JSON.stringify(ev.input).slice(0, 100)}`); break;
     case "fallback": console.error(`[fallback] ${ev.from} -> ${ev.to}: ${ev.reason}`); break;
     case "error": console.error(`error: ${ev.message}`); fail(); break;
+    case "done": if (lastChar !== "\n") process.stdout.write("\n"); lastChar = "\n"; break;
     default: break;
   }
 }

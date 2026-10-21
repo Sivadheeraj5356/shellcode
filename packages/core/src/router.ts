@@ -13,6 +13,8 @@ export interface RouteInput {
 const HEAVY_WORDS = /\b(refactor|architect\w*|redesign|migrat\w+|race condition|deadlock|concurren\w+|security|vulnerab\w+|performance|optimi[sz]e|rewrite|implement (a|an|the)? ?\w+ (system|service|engine|pipeline)|debug|root cause|across (the )?(repo|codebase|files)|multi[- ]file|from scratch|algorithm|schema|end[- ]to[- ]end)\b/i;
 const LIGHT_WORDS = /\b(typo|rename|format|lint|comment|docstring|explain|what is|what does|summari[sz]e|one[- ]liner|add a log|bump|version|readme|translate|list)\b/i;
 
+const MEDIUM_WORDS = /\b(fail\w*|error|bug|broken|why|tests?|crash\w*|exception|regression|investigate|diagnose)\b/i;
+
 export function scoreTask(input: RouteInput): { score: number; tier: Tier; reasons: string[] } {
   const reasons: string[] = [];
   let score = 0;
@@ -25,6 +27,7 @@ export function scoreTask(input: RouteInput): { score: number; tier: Tier; reaso
   if (heavy) { score += Math.min(3, heavy.length * 2); reasons.push(`complex work: ${[...new Set(heavy.map((s) => s.toLowerCase()))].join(", ")}`); }
   const light = p.match(new RegExp(LIGHT_WORDS.source, "gi"));
   if (light) { score -= Math.min(2, light.length); reasons.push(`simple work: ${[...new Set(light.map((s) => s.toLowerCase()))].join(", ")}`); }
+  if (MEDIUM_WORDS.test(p)) { score += 1; reasons.push("diagnosis or testing work"); }
   if (/```|stack trace|traceback|\bat \S+:\d+/.test(p)) { score += 1; reasons.push("contains code or a stack trace"); }
   if ((input.fileCount ?? 0) >= 4) { score += 2; reasons.push(`${input.fileCount} files involved`); }
   else if ((input.fileCount ?? 0) >= 2) { score += 1; reasons.push(`${input.fileCount} files involved`); }
