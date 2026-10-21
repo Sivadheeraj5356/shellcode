@@ -2,7 +2,7 @@ import type { AgentEvent, ModelInfo, RunOptions } from "./types";
 import { loadConfig, type Config } from "./config";
 import { PROVIDERS, apiKey, discoverModels } from "./providers";
 import { route } from "./router";
-import { CLI_HARNESSES, runCli, which, opencodeModelIsZeroPriced } from "./harness/cli";
+import { CLI_HARNESSES, runCli, which, opencodeModelIsZeroPriced, opencodeZeroPricedModels } from "./harness/cli";
 import { runNative } from "./harness/native";
 
 export interface HarnessStatus { id: string; name: string; kind: "native" | "cli"; ready: boolean; detail: string; }
@@ -42,7 +42,7 @@ export async function harnessStatus(env = process.env, anyModels = false): Promi
   return [native, ...cli];
 }
 
-export async function* runAgent(opts: RunOptions, deps: { cfg?: Config; env?: Record<string, string | undefined>; fetchImpl?: typeof fetch; models?: ModelInfo[]; approve?: (w: string) => Promise<boolean> } = {}): AsyncGenerator<AgentEvent> {
+export async function* runAgent(opts: RunOptions, deps: { cfg?: Config; env?: Record<string, string | undefined>; fetchImpl?: typeof fetch; models?: ModelInfo[]; approve?: (w: string) => Promise<boolean>; confirmExternalCost?: (harness: string) => Promise<boolean> } = {}): AsyncGenerator<AgentEvent> {
   const cfg = deps.cfg ?? (await loadConfig());
   const env = deps.env ?? process.env;
   const policy = opts.policy ?? cfg.policy;
@@ -70,7 +70,16 @@ export async function* runAgent(opts: RunOptions, deps: { cfg?: Config; env?: Re
 
   const wanted = opts.harness ?? cfg.harness;
   const harnesses = await harnessStatus(env as any, models.length > 0);
-  let pick = wanted === "auto" ? (harnesses.find((h) => h.id === "native" && h.ready) ?? harnesses.find((h) => h.ready)) : harnesses.find((h) => h.id === wanted);
+  let autoPin: string | undefined;
+  let pick = wanted === "auto" ? harnesses.find((h) => h.id === "native" && h.ready) : harnesses.find((h) => h.id === wanted);
+  if (wanted === "auto" && !pick) {
+    // Native has no usable model. Only fall back to a harness whose price is verified as zero right now.
+    const oc = harnesses.find((h) => h.id === "opencode" && h.ready);
+    if (oc) {
+      const free = await opencodeZeroPricedModels(oc.detail, env as any);
+      if (free.length) { autoPin = free[0]; pick = oc; yield { type: "fallback", from: "native", to: free[0]!, reason: "no usable model for the built-in agent; OpenCode's own catalog lists this one at price 0" }; }
+    }
+  }
   if (!pick) { yield { type: "error", message: "No harness ready. Run `shellcode doctor`." }; return; }
   if (!pick.ready) { yield { type: "error", message: `${pick.name} is not ready: ${pick.detail}` }; return; }
 
@@ -81,11 +90,12 @@ export async function* runAgent(opts: RunOptions, deps: { cfg?: Config; env?: Re
   const spec = CLI_HARNESSES.find((h) => h.id === pick!.id)!;
   // Fail closed: an external harness uses its own login/keys, so Shellcode cannot see or cap its billing.
   // Allowed only for an OpenCode pin whose own model catalog lists input, output and cache cost as exactly 0 (checked right now; unknown fails closed), or with an explicit per-run acknowledgment.
-  const knownFree = spec.id === "opencode" && !!pin && (await opencodeModelIsZeroPriced(pick.detail, pin, env as any));
-  if (!knownFree && !opts.acknowledgeExternalCost) {
+  const effPin = autoPin ?? pin;
+  const knownFree = spec.id === "opencode" && !!effPin && (await opencodeModelIsZeroPriced(pick.detail, effPin, env as any));
+  if (!knownFree && !opts.acknowledgeExternalCost && !(deps.confirmExternalCost && (await deps.confirmExternalCost(spec.name)))) {
     yield { type: "error", message: `${spec.name} manages its own account and billing, which Shellcode cannot verify, so it was not started (policy ${policy}). Re-run with --ack-external-cost to accept that cost yourself, or use the built-in agent or an OpenCode model whose catalog price is zero.` };
     return;
   }
   // External harnesses own their model/auth, so the free policy cannot be enforced for them. The pin is passed exactly as given (OpenCode wants provider/model).
-  yield* runCli(spec, pick.detail, opts.prompt, { cwd: opts.cwd, model: pin && spec.supportsModel ? pin : undefined, yolo: opts.yolo ?? cfg.yolo, signal: opts.signal });
+  yield* runCli(spec, pick.detail, opts.prompt, { cwd: opts.cwd, model: effPin && spec.supportsModel ? effPin : undefined, yolo: opts.yolo ?? cfg.yolo, signal: opts.signal });
 }

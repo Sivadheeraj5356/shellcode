@@ -46,8 +46,8 @@ export const CLI_HARNESSES: CliHarnessSpec[] = [
   { id: "aider", name: "Aider", bin: "aider", supportsModel: true,
     args: (p, o) => ["--message", p, "--yes-always", ...(o.model ? ["--model", o.model] : [])],
     install: "python -m pip install aider-chat", docs: "https://aider.chat/docs/scripting.html", yoloMeaning: "always passes --yes-always (needed to run headless; it edits files in your git repo)", auth: "provider keys in env" },
-  { id: "goose", name: "Goose", bin: "goose", supportsModel: false,
-    args: (p) => ["run", "-t", p],
+  { id: "goose", name: "Goose", bin: "goose", supportsModel: true,
+    args: (p, o) => { const [prov, ...rest] = (o.model ?? "").split("/"); const m = rest.join("/"); return ["run", ...(prov && m ? ["--provider", prov, "--model", m] : []), "-t", p]; },
     install: "curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh | bash", docs: "https://block.github.io/goose/docs/guides/goose-cli-commands/", yoloMeaning: "none passed", auth: "own provider config" },
 ];
 
@@ -83,19 +83,28 @@ export async function* runCli(spec: CliHarnessSpec, bin: string, prompt: string,
   yield { type: "done", harness: spec.id, model: o.model };
 }
 
+/** Parse `opencode models <provider> --verbose` into id -> cost record. Anything unparsable yields an empty map. */
+export async function opencodeCatalog(bin: string, provider: string, env = process.env): Promise<Map<string, any>> {
+  const out = new Map<string, any>();
+  try {
+    const { execFile } = await import("node:child_process");
+    const txt = await new Promise<string>((res, rej) => execFile(bin, ["models", provider, "--verbose"], { env: env as any, timeout: 20000, maxBuffer: 20_000_000 }, (e, so) => (e ? rej(e) : res(String(so)))));
+    const parts = txt.split(/^([A-Za-z0-9._-]+\/[^\s]+)\n/m);
+    for (let i = 1; i + 1 < parts.length; i += 2) { try { out.set(parts[i]!, JSON.parse(parts[i + 1]!.trim())); } catch {} }
+  } catch {}
+  return out;
+}
+const zeroCost = (m: any) => m?.cost?.input === 0 && m?.cost?.output === 0 && m?.cost?.cache?.read === 0 && m?.cost?.cache?.write === 0;
+
 /** Ask OpenCode's own catalog whether provider/model is priced at exactly zero. Anything unknown or unparsable is "not free". */
 export async function opencodeModelIsZeroPriced(bin: string, pin: string, env = process.env): Promise<boolean> {
   const provider = pin.split("/")[0];
   if (!provider || !pin.includes("/")) return false;
-  try {
-    const { execFile } = await import("node:child_process");
-    const out = await new Promise<string>((res, rej) => execFile(bin, ["models", provider, "--verbose"], { env: env as any, timeout: 20000, maxBuffer: 20_000_000 }, (e, so) => (e ? rej(e) : res(String(so)))));
-    const parts = out.split(/^([A-Za-z0-9._-]+\/[^\s]+)\n/m);
-    for (let i = 1; i + 1 < parts.length; i += 2) {
-      if (parts[i] !== pin) continue;
-      const m = JSON.parse(parts[i + 1]!.trim());
-      return m?.cost?.input === 0 && m?.cost?.output === 0 && m?.cost?.cache?.read === 0 && m?.cost?.cache?.write === 0;
-    }
-  } catch {}
-  return false;
+  return zeroCost((await opencodeCatalog(bin, provider, env)).get(pin));
+}
+
+/** Zero-priced, active, tool-capable OpenCode models from its own catalog (provider "opencode" only). */
+export async function opencodeZeroPricedModels(bin: string, env = process.env): Promise<string[]> {
+  const cat = await opencodeCatalog(bin, "opencode", env);
+  return [...cat.entries()].filter(([, m]) => zeroCost(m) && m.status !== "deprecated" && m.capabilities?.toolcall !== false).map(([id]) => id);
 }

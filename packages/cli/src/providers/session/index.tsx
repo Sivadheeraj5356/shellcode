@@ -86,6 +86,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const models = providers.flatMap((p) => p.models);
         for await (const ev of runAgent({ prompt: text, cwd: process.cwd(), history: historyRef.current.slice(-20), signal: ac.signal }, {
           cfg: cfgRef.current, models,
+          confirmExternalCost: (name) => new Promise<boolean>((resolve) => setApproval({ what: `run ${name}, which bills its own account (Shellcode cannot verify the price)`, resolve: (ok) => { setApproval(null); resolve(ok); } })),
           approve: (what) => new Promise<boolean>((resolve) => setApproval({ what, resolve: (ok) => { setApproval(null); resolve(ok); } })),
         })) handle(ev);
         flush();

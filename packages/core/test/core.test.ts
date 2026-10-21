@@ -282,3 +282,44 @@ test("router: diagnosis and test-writing prompts are not treated as trivial", ()
   expect(scoreTask({ prompt: "write a unit test for the parser" }).tier).toBe("standard");
   expect(scoreTask({ prompt: "fix typo in readme" }).tier).toBe("light");
 });
+
+test("auto harness: no native model -> only an OpenCode model its own catalog prices at 0, never an unverified harness", async () => {
+  const { mkdir } = await import("node:fs/promises");
+  const mk = async (catalog: string) => {
+    const dir = await mkdtemp(join(tmpdir(), "sc-auto-"));
+    const bin = join(dir, "bin"); await mkdir(bin);
+    const marker = join(dir, "ran");
+    await writeFile(join(bin, "opencode"), `#!/bin/sh\n[ "$1" = "--version" ] && echo 1 && exit 0\nif [ "$1" = "models" ]; then cat <<'CAT'\n${catalog}CAT\nexit 0; fi\ntouch ${marker}\necho "ran:$*"\n`, { mode: 0o755 });
+    await writeFile(join(bin, "aider"), `#!/bin/sh\n[ "$1" = "--version" ] && echo 1 && exit 0\ntouch ${marker}\n`, { mode: 0o755 });
+    return { dir, marker, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } };
+  };
+  const cat = (id: string, c: number) => `${id}\n${JSON.stringify({ id, status: "active", cost: { input: c, output: c, cache: { read: 0, write: 0 } }, capabilities: { toolcall: true } }, null, 2)}\n`;
+  const ok = await mk(cat("opencode/zero", 0) + cat("opencode/paid", 2));
+  const ev = await collect(runAgent({ prompt: "hi", cwd: ok.dir }, { cfg: DEFAULT_CONFIG, models: [], env: ok.env }));
+  expect(ev.some((e: any) => e.type === "fallback" && e.to === "opencode/zero")).toBe(true);
+  expect(ev.map((e: any) => e.text ?? "").join("")).toContain("opencode/zero");
+  const paid = await mk(cat("opencode/paid", 2));
+  const ev2 = await collect(runAgent({ prompt: "hi", cwd: paid.dir }, { cfg: DEFAULT_CONFIG, models: [], env: paid.env }));
+  expect(ev2.some((e) => e.type === "error")).toBe(true);
+  expect(await Bun.file(paid.marker).exists()).toBe(false);
+}, 30000);
+
+test("external cost confirmation hook: refusal never spawns, approval does", async () => {
+  const { mkdir } = await import("node:fs/promises");
+  const dir = await mkdtemp(join(tmpdir(), "sc-conf-"));
+  const bin = join(dir, "bin"); await mkdir(bin);
+  const marker = join(dir, "ran");
+  await writeFile(join(bin, "aider"), `#!/bin/sh\n[ "$1" = "--version" ] && echo 1 && exit 0\ntouch ${marker}\necho ran\n`, { mode: 0o755 });
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}` };
+  const no = await collect(runAgent({ prompt: "hi", cwd: dir, harness: "aider" }, { cfg: DEFAULT_CONFIG, models: [], env, confirmExternalCost: async () => false }));
+  expect(no.some((e) => e.type === "error")).toBe(true);
+  expect(await Bun.file(marker).exists()).toBe(false);
+  const yes = await collect(runAgent({ prompt: "hi", cwd: dir, harness: "aider" }, { cfg: DEFAULT_CONFIG, models: [], env, confirmExternalCost: async () => true }));
+  expect(yes.some((e) => e.type === "text")).toBe(true);
+}, 30000);
+
+test("goose adapter passes --provider/--model only for a provider/model pin", () => {
+  const g = CLI_HARNESSES.find((h) => h.id === "goose")!;
+  expect(g.args("x", { model: "anthropic/claude-4-sonnet" } as any)).toEqual(["run", "--provider", "anthropic", "--model", "claude-4-sonnet", "-t", "x"]);
+  expect(g.args("x", {} as any)).toEqual(["run", "-t", "x"]);
+});

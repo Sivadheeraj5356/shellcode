@@ -42,6 +42,7 @@ async function doctor() {
   for (const h of await harnessStatus(process.env as any, anyModels)) {
     const spec = CLI_HARNESSES.find((x) => x.id === h.id);
     console.log(`  ${h.ready ? "●" : "○"} ${h.name.padEnd(28)} ${h.ready && spec ? `installed: ${h.detail}` : h.detail}`);
+    if (spec) console.log(`      cost: ${spec.id === "opencode" ? "allowed without a flag only for models its catalog prices at 0" : "refused unless you confirm or pass --ack-external-cost (billing is on its own account)"}`);
     if (spec) console.log(`      flags checked against ${spec.docs}\n      --yolo maps to: ${spec.yoloMeaning}${spec.supportsModel ? "" : "\n      model: chosen inside the harness"}`);
   }
   console.log(`\nPolicy: ${cfg.policy}   Harness: ${cfg.harness}${cfg.model ? `   Pinned model: ${cfg.model}` : ""}`);
@@ -80,7 +81,7 @@ async function runCmd(args: string[]) {
     return /^y/i.test(line.trim());
   };
   let failed = false;
-  for await (const ev of runAgent({ prompt, cwd: process.cwd(), harness: harness === "native" ? "native" : harness, model, policy, yolo, acknowledgeExternalCost: ack }, { approve })) print(ev, () => (failed = true));
+  for await (const ev of runAgent({ prompt, cwd: process.cwd(), harness: harness === "native" ? "native" : harness, model, policy, yolo, acknowledgeExternalCost: ack }, { approve, confirmExternalCost: (n) => approve(`${n} (bills its own account, price unverified by Shellcode)`) })) print(ev, () => (failed = true));
   if (failed) process.exitCode = 1;
 }
 

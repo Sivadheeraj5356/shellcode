@@ -17,8 +17,8 @@ function Row({ e }: { e: Entry }) {
       return <box paddingLeft={2} marginTop={1}><text>{e.text}</text></box>;
     case "route":
       return (
-        <box paddingLeft={2} flexDirection="row" gap={1}>
-          <text fg={colors.info}>route</text>
+        <box paddingLeft={2} flexDirection="row">
+          <box marginRight={1} flexShrink={0}><text fg={colors.info}>route</text></box>
           <text attributes={TextAttributes.DIM}>
             {TIER_LABEL[e.tier]} {e.model ? `→ ${e.model}` : "→ no model"} · {e.reasons.slice(0, 2).join("; ")}
           </text>

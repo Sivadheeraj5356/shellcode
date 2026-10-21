@@ -24,8 +24,8 @@ export const PROVIDERS: ProviderSpec[] = [
   { id: "groq", name: "Groq", baseUrl: "https://api.groq.com/openai/v1", keyEnv: "GROQ_API_KEY", cost: "unverified", note: "Free access not confirmed from current docs. Add \"groq\" to allowFree in config if your account is free", signup: "https://console.groq.com/keys", terms: "https://console.groq.com/docs/rate-limits" },
   { id: "cerebras", name: "Cerebras", baseUrl: "https://api.cerebras.ai/v1", keyEnv: "CEREBRAS_API_KEY", cost: "unverified", note: "Docs describe $5 trial credits that need a verified payment method. Not treated as free", signup: "https://cloud.cerebras.ai", terms: "https://inference-docs.cerebras.ai/support/rate-limits" },
   { id: "mistral", name: "Mistral", baseUrl: "https://api.mistral.ai/v1", keyEnv: "MISTRAL_API_KEY", cost: "unverified", note: "Free access and training-data terms not confirmed. Add \"mistral\" to allowFree in config if your account is free", signup: "https://console.mistral.ai", terms: "https://docs.mistral.ai/admin/billing-usage/usage-limits" },
-  { id: "ollama", name: "Ollama (local)", baseUrl: "http://localhost:11434/v1", keyEnv: null, cost: "local", note: "Runs on your machine, no key" },
-  { id: "lmstudio", name: "LM Studio (local)", baseUrl: "http://localhost:1234/v1", keyEnv: null, cost: "local", note: "Runs on your machine, no key" },
+  { id: "ollama", name: "Local server :11434", baseUrl: "http://localhost:11434/v1", keyEnv: null, cost: "local", note: "Any OpenAI-compatible server on port 11434 (Ollama default; llama.cpp llama-server works if started with --port 11434). Runs on your machine, no key" },
+  { id: "lmstudio", name: "Local server :1234", baseUrl: "http://localhost:1234/v1", keyEnv: null, cost: "local", note: "Runs on your machine, no key" },
   { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1", keyEnv: "OPENAI_API_KEY", cost: "paid", note: "Paid per token" },
   { id: "anthropic", name: "Anthropic", baseUrl: "https://api.anthropic.com/v1", keyEnv: "ANTHROPIC_API_KEY", cost: "paid", note: "Paid per token (OpenAI-compatible endpoint)" },
 ];

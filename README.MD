@@ -13,6 +13,16 @@ One terminal for every coding agent. Shellcode runs the coding harnesses you alr
 - **Streaming and sessions.** Replies stream token by token. Conversations are saved to `~/.shellcode/sessions` and can be resumed with `/sessions`.
 - **Permissions, honestly.** The built-in agent asks before writing files or running commands unless you turn on auto-approve (`/yolo`). The file tools refuse paths outside the project, including through symlinks. The shell tool is **not sandboxed**: an approved command can do anything you can, so read what you approve. Commands do not receive environment variables whose names contain KEY, TOKEN, SECRET, PASSWORD or AUTH. For external harnesses, `/yolo` maps only to the narrowest documented switch (for example Claude Code `acceptEdits`, Codex `--sandbox workspace-write`); Shellcode never passes a skip-all-permissions flag.
 
+## Choosing harnesses and models
+
+- `auto` (default) uses the built-in agent when any allowed model exists. If none does, it falls back only to an OpenCode model that OpenCode's own catalog lists at price 0 right now. It never auto-selects a harness whose price it cannot verify.
+- External harnesses other than that case need a per-run confirmation (a prompt in the TUI and the terminal, or `--ack-external-cost`). The prompt is only approval UX: Shellcode cannot see their billing.
+- Local servers: the `:11434` and `:1234` entries accept any OpenAI-compatible server. Add your own under `providers` in the config file with `cost: "local"` for other ports.
+
+### Routing evaluation (`bun run packages/core/eval/routing.ts`)
+
+Tier routing is a keyword and length heuristic. I labelled 44 prompts by hand (light, standard, heavy) and a second held-out set of 24 written after the last rule change. The labels come from the same author as the rules, so treat the numbers as optimistic, and they measure agreement with those labels, not whether a model solved the task. Before any tuning the first set scored 61% (27/44). After adjusting the rules it scores 86%, but that set was used to tune. The held-out set scores 67% (16/24) with no two-tier misses; its mistakes are mostly hard tasks routed one tier too low. Failed attempts escalate the tier, which is the safety net.
+
 ## Install and run
 
 Requires [Bun](https://bun.sh).
