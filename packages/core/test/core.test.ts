@@ -139,7 +139,7 @@ test("CLI harness adapter streams stdout of a real subprocess", async () => {
   const bin = join(dir, "bin"); await Bun.$`mkdir -p ${bin}`;
   await writeFile(join(bin, "aider"), '#!/bin/sh\necho "fake-aider got: $2"\n', { mode: 0o755 });
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}` };
-  const ev = await collect(runAgent({ prompt: "hi there", cwd: dir, harness: "aider" }, { cfg: DEFAULT_CONFIG, models: [], env }));
+  const ev = await collect(runAgent({ prompt: "hi there", cwd: dir, harness: "aider", acknowledgeExternalCost: true }, { cfg: DEFAULT_CONFIG, models: [], env }));
   expect(ev.filter((e) => e.type === "text").map((e: any) => e.text).join("")).toContain("fake-aider got: hi there");
 });
 
@@ -257,3 +257,22 @@ test("a binary that exists but fails --version is reported not ready", async () 
   expect(st.find((h) => h.id === "aider")!.ready).toBe(false);
   expect(st.find((h) => h.id === "codex")!.ready).toBe(false);
 });
+
+test("external harness with unknown cost is refused under free policy and never spawned", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "sc-ext-"));
+  const bin = join(dir, "bin"); await (await import("node:fs/promises")).mkdir(bin);
+  const marker = join(dir, "ran");
+  const cat = (id: string, c: number) => `${id}\n${JSON.stringify({ id, cost: { input: c, output: c, cache: { read: 0, write: 0 } } }, null, 2)}\n`;
+  const catalog = cat("opencode/glm-free", 0) + cat("opencode/paid-free", 1);
+  await writeFile(join(bin, "opencode"), `#!/bin/sh\n[ "$1" = "--version" ] && echo 1 && exit 0\nif [ "$1" = "models" ]; then cat <<'CAT'\n${catalog}CAT\nexit 0; fi\ntouch ${marker}\necho ran\n`, { mode: 0o755 });
+  for (const name of ["claude", "aider"]) await writeFile(join(bin, name), `#!/bin/sh\n[ "$1" = "--version" ] && echo 1 && exit 0\ntouch ${marker}\necho ran\n`, { mode: 0o755 });
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}` };
+  for (const [h, model] of [["claude-code", undefined], ["aider", "gpt-4o"], ["opencode", "openrouter/some-paid-model"], ["opencode", "opencode/paid-free"], ["opencode", "opencode/unlisted-free"]] as const) {
+    const ev = await collect(runAgent({ prompt: "hi", cwd: dir, harness: h, model, policy: "free" }, { cfg: DEFAULT_CONFIG, models: [], env }));
+    expect(ev.some((e) => e.type === "error")).toBe(true);
+    expect(ev.some((e) => e.type === "text")).toBe(false);
+  }
+  expect(await Bun.file(marker).exists()).toBe(false);
+  const ok = await collect(runAgent({ prompt: "hi", cwd: dir, harness: "opencode", model: "opencode/glm-free", policy: "free" }, { cfg: DEFAULT_CONFIG, models: [], env }));
+  expect(ok.some((e) => e.type === "text")).toBe(true);
+}, 30000);

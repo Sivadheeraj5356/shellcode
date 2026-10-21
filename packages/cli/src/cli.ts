@@ -14,6 +14,7 @@ Options for run
   -m, --model <p/m>    pin provider/model (built-in agent)
   -p, --policy <p>     free (default) | balanced | quality
   -y, --yolo           auto-approve edits and commands
+      --ack-external-cost  external harnesses bill their own account; required unless the OpenCode catalog prices the pinned model at 0
 `;
 
 export async function maybeRunSubcommand(argv: string[]): Promise<boolean> {
@@ -59,7 +60,7 @@ async function routeCmd(prompt: string) {
 }
 
 async function runCmd(args: string[]) {
-  let harness: string | undefined, model: string | undefined, policy: Policy | undefined, yolo = false;
+  let harness: string | undefined, model: string | undefined, policy: Policy | undefined, yolo = false, ack = false;
   const words: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
@@ -67,6 +68,7 @@ async function runCmd(args: string[]) {
     else if (a === "-m" || a === "--model") model = args[++i];
     else if (a === "-p" || a === "--policy") policy = args[++i] as Policy;
     else if (a === "-y" || a === "--yolo") yolo = true;
+    else if (a === "--ack-external-cost") ack = true;
     else words.push(a);
   }
   const prompt = words.join(" ");
@@ -78,7 +80,7 @@ async function runCmd(args: string[]) {
     return /^y/i.test(line.trim());
   };
   let failed = false;
-  for await (const ev of runAgent({ prompt, cwd: process.cwd(), harness: harness === "native" ? "native" : harness, model, policy, yolo }, { approve })) print(ev, () => (failed = true));
+  for await (const ev of runAgent({ prompt, cwd: process.cwd(), harness: harness === "native" ? "native" : harness, model, policy, yolo, acknowledgeExternalCost: ack }, { approve })) print(ev, () => (failed = true));
   if (failed) process.exitCode = 1;
 }
 

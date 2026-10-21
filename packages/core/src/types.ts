@@ -38,6 +38,8 @@ export interface RunOptions {
   model?: string; // "provider/model" pin
   /** auto-approve file writes and shell commands (native harness) */
   yolo?: boolean;
+  /** per-run acknowledgment that an external harness bills (or not) on its own account; Shellcode cannot verify it */
+  acknowledgeExternalCost?: boolean;
   signal?: AbortSignal;
   history?: ChatMessage[];
 }

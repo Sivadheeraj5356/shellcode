@@ -2,7 +2,7 @@ import type { AgentEvent, ModelInfo, RunOptions } from "./types";
 import { loadConfig, type Config } from "./config";
 import { PROVIDERS, apiKey, discoverModels } from "./providers";
 import { route } from "./router";
-import { CLI_HARNESSES, runCli, which } from "./harness/cli";
+import { CLI_HARNESSES, runCli, which, opencodeModelIsZeroPriced } from "./harness/cli";
 import { runNative } from "./harness/native";
 
 export interface HarnessStatus { id: string; name: string; kind: "native" | "cli"; ready: boolean; detail: string; }
@@ -59,7 +59,9 @@ export async function* runAgent(opts: RunOptions, deps: { cfg?: Config; env?: Re
   }
   // A pin never bypasses the policy. Unknown pins are treated as paid, so under "free" they are refused.
   const decision = route({ prompt: opts.prompt, turns: opts.history?.length }, usable, policy);
-  if (pin && decision.chain.length === 0) {
+  const extWanted = (opts.harness ?? cfg.harness);
+  const external = extWanted !== "native" && extWanted !== "auto";
+  if (pin && !external && decision.chain.length === 0) {
     yield { type: "route", decision };
     yield { type: "error", message: `Pinned model ${pin} is not allowed by the ${policy} policy (unknown or paid). Pick another model or change /policy.` };
     return;
@@ -77,6 +79,13 @@ export async function* runAgent(opts: RunOptions, deps: { cfg?: Config; env?: Re
     return;
   }
   const spec = CLI_HARNESSES.find((h) => h.id === pick!.id)!;
-  // External harnesses own their model/auth. Only pass a model when the user pinned one for this harness.
-  yield* runCli(spec, pick.detail, opts.prompt, { cwd: opts.cwd, model: pin && spec.supportsModel ? pin.split("/").slice(1).join("/") : undefined, yolo: opts.yolo ?? cfg.yolo, signal: opts.signal });
+  // Fail closed: an external harness uses its own login/keys, so Shellcode cannot see or cap its billing.
+  // Allowed only for an OpenCode pin whose own model catalog lists input, output and cache cost as exactly 0 (checked right now; unknown fails closed), or with an explicit per-run acknowledgment.
+  const knownFree = spec.id === "opencode" && !!pin && (await opencodeModelIsZeroPriced(pick.detail, pin, env as any));
+  if (!knownFree && !opts.acknowledgeExternalCost) {
+    yield { type: "error", message: `${spec.name} manages its own account and billing, which Shellcode cannot verify, so it was not started (policy ${policy}). Re-run with --ack-external-cost to accept that cost yourself, or use the built-in agent or an OpenCode model whose catalog price is zero.` };
+    return;
+  }
+  // External harnesses own their model/auth, so the free policy cannot be enforced for them. The pin is passed exactly as given (OpenCode wants provider/model).
+  yield* runCli(spec, pick.detail, opts.prompt, { cwd: opts.cwd, model: pin && spec.supportsModel ? pin : undefined, yolo: opts.yolo ?? cfg.yolo, signal: opts.signal });
 }

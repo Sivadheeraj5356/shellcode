@@ -82,3 +82,20 @@ export async function* runCli(spec: CliHarnessSpec, bin: string, prompt: string,
   }
   yield { type: "done", harness: spec.id, model: o.model };
 }
+
+/** Ask OpenCode's own catalog whether provider/model is priced at exactly zero. Anything unknown or unparsable is "not free". */
+export async function opencodeModelIsZeroPriced(bin: string, pin: string, env = process.env): Promise<boolean> {
+  const provider = pin.split("/")[0];
+  if (!provider || !pin.includes("/")) return false;
+  try {
+    const { execFile } = await import("node:child_process");
+    const out = await new Promise<string>((res, rej) => execFile(bin, ["models", provider, "--verbose"], { env: env as any, timeout: 20000, maxBuffer: 20_000_000 }, (e, so) => (e ? rej(e) : res(String(so)))));
+    const parts = out.split(/^([A-Za-z0-9._-]+\/[^\s]+)\n/m);
+    for (let i = 1; i + 1 < parts.length; i += 2) {
+      if (parts[i] !== pin) continue;
+      const m = JSON.parse(parts[i + 1]!.trim());
+      return m?.cost?.input === 0 && m?.cost?.output === 0 && m?.cost?.cache?.read === 0 && m?.cost?.cache?.write === 0;
+    }
+  } catch {}
+  return false;
+}
