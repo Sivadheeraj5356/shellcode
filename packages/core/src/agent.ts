@@ -4,6 +4,7 @@ import { PROVIDERS, apiKey, discoverModels } from "./providers";
 import { route } from "./router";
 import { CLI_HARNESSES, runCli, which, opencodeModelIsZeroPriced, opencodeZeroPricedModels } from "./harness/cli";
 import { runNative } from "./harness/native";
+import { readLedger, recentFailures } from "./ledger";
 
 export interface HarnessStatus { id: string; name: string; kind: "native" | "cli"; ready: boolean; detail: string; }
 export interface ProviderStatus { id: string; name: string; cost: string; ready: boolean; detail: string; models: ModelInfo[]; }
@@ -58,7 +59,10 @@ export async function* runAgent(opts: RunOptions, deps: { cfg?: Config; env?: Re
     usable = [found ?? { provider: prov!, id, tier: "standard", free: false, cost: "paid" }];
   }
   // A pin never bypasses the policy. Unknown pins are treated as paid, so under "free" they are refused.
-  const decision = route({ prompt: opts.prompt, turns: opts.history?.length }, usable, policy);
+  // Escalation: recent failed attempts at this same task (ledger, last 24h) raise the tier.
+  let previousFailures = 0;
+  try { previousFailures = recentFailures(await readLedger(env as any), opts.cwd, opts.prompt); } catch { /* ledger is best-effort */ }
+  const decision = route({ prompt: opts.prompt, turns: opts.history?.length, previousFailures }, usable, policy);
   const extWanted = (opts.harness ?? cfg.harness);
   const external = extWanted !== "native" && extWanted !== "auto";
   if (pin && !external && decision.chain.length === 0) {
