@@ -108,3 +108,38 @@ Run `bun run test` and `bun run typecheck`.
 ## Notes
 
 Shellcode started from the structure of the [Nightcode tutorial](https://github.com/code-with-antonio/nightcode) (a Bun + OpenTUI terminal app). It is a different product: no account system, billing or hosted server, and the agent, router, providers and harness layer are original code.
+
+## Reliability features (rebuilt 2026-11-05)
+
+New tested code, rebuilt from the recorded feature list after the original
+local-only implementation (Oct 24) was lost before any push. These are
+re-implementations, not recovered commits.
+
+- **Outcome ledger.** Every built-in-agent run appends to
+  `~/.shellcode/ledger.jsonl`: tier, model, fallbacks, tools used, files
+  changed, outcome (`edited` / `answered` / `no-change` / `error`), wall time.
+- **Persisted-change verification.** The workspace is snapshotted before and
+  after each run (files up to 1MB are content-hashed, capped at 5000 files /
+  64MB hashed). A run whose edit tools reported success but left no persisted
+  change is recorded as `no-change`, not success. This proves a change
+  landed on disk; it says nothing about whether the change is correct.
+- **Model failure cooldown.** A model that fails with a retryable error is
+  cooled down with exponential backoff (1, 2, 4 ... minutes, capped at 60,
+  persisted in `~/.shellcode/cooldowns.json`). Later runs skip cooling models
+  when another chain model is available; a successful call clears the record.
+  Cooldown is a preference, never a policy gate.
+- **Escalation.** Failed attempts (`error` / `no-change`) at the same task in
+  the last 24h raise the routing tier on the next attempt via the existing
+  `previousFailures` signal. A successful answer without edits is not a
+  failure.
+
+Verification status, stated plainly:
+- 55 automated tests green (27 original + 21 synthetic harness-adapter wiring
+  proofs + 7 ledger/cooldown/snapshot tests), typecheck clean.
+- Harness adapters are verified against STUB binaries that record argv - the
+  spawn wiring, flag mapping and cost gate are proven; real vendor CLIs with
+  real accounts have NOT been run.
+- Live free-tier Gemini path verified 2026-11-05: doctor discovered 41 models;
+  a real read/edit/verify task completed through the built-in agent with one
+  observed HTTP 500 handled by the fallback chain.
+- OpenRouter free path verified Oct 24 (see git history notes); not re-run.
