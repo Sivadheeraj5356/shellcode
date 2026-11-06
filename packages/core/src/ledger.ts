@@ -114,4 +114,4 @@ export async function clearModelFailure(modelKey: string, env?: Record<string, s
 export function inCooldown(all: CooldownFile, modelKey: string, now = Date.now()): boolean {
   const s = all[modelKey];
   return !!s && new Date(s.cooldownUntil).getTime() > now;
-    }
+}
